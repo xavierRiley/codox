@@ -3,7 +3,8 @@
    compatible with the clojuredocs.org project."
   (:use [hiccup core page element])
   (:import java.net.URLEncoder)
-  (:require [clojure.java.io :as io]
+  (:require [clojure.java.jdbc :as jdbc]
+            [clojure.java.io :as io]
             [clojure.string :as str]))
 
 (comment "so here's the plan;
@@ -13,8 +14,11 @@
   Start small by doing an sql file of insert statements, one
   for each function.")
 
-(defn- prepare-statement []
-  (doto
+(defn write-docs [project]
+  (doseq [namespace (:namespaces project)]
+    (println (:name namespace))))
+
+  (comment
   (get-function-name)
   (get-filepath-relative-to-root)
   (get-line-number)
@@ -27,7 +31,22 @@
   (get-version)
   (get-url-friendly-name)
   ;; get namespace by doing a join on name with the other table?
-  (get-namespace-id)))
+  (get-namespace-id))
+
+(defn- sql-for-insert 
+  "Converts a table identifier (keyword or string) and a hash identifying
+   a record into an sql insert statement compatible with prepareStatement
+    Returns [sql values-to-insert]"
+  [table record]
+  (let [table-name (as-str table)
+        columns (map as-str (keys record))
+        values (vals record)
+        n (count columns)
+        template (join "," (replicate n "?"))
+        column-names (join "," columns)
+        sql (format "insert into %s (%s) values (%s)"
+                    table-name column-names template)]
+    [sql values]))
 
 (defn- ns-filename [namespace]
   (str (:name namespace) ".html"))
@@ -158,13 +177,9 @@
           (namespace-page project namespace))))
 
 (defn write-docs
-  "Take raw documentation info and turn it into formatted HTML."
+  "Take raw documentation info and turn it into formatted SQL."
   [project]
-  (doto (:output-dir project "doc")
-    (mkdirs "css" "js")
-    (copy-resource "codox/css/default.css" "css/default.css")
-    (copy-resource "codox/js/jquery.min.js" "js/jquery.min.js")
-    (copy-resource "codox/js/page_effects.js" "js/page_effects.js")
+  (doto (:output-dir project "doc-sql")
     (write-index project)
     (write-namespaces project))
   nil)
